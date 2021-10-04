@@ -90,9 +90,18 @@ class YubiHSMProbe:
 
     def __init__(self, config):
         self.__config = config
+        self.__labels = [config.url]
+        self.__info = prometheus_client.Info('yubihsm_device_info', 
+                                             'Information about YubiHSM2 device')
 
     def probe(self):
-        pass
+        logging.info('Connect to YubiHSM connector %s', self.__config.url)
+        hsm = yubihsm.YubiHsm.connect(self.__config.url)
+        try:
+            info = hsm.get_device_info()
+            self.__info.info({'version': str(info.version)})
+        except yubihsm.exceptions.YubiHsmConnectionError as e:
+            logging.error('Failed to connect to %s: %s', self.__config.url, e)
 
 
 def main():
