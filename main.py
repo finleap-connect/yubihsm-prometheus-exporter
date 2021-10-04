@@ -8,7 +8,7 @@ import json
 
 def expect_field(data, context, name, t):
     if name not in data or not isinstance(data[name], t):
-        logging.error('Expected field %s of type %v in %s', name, t, context)
+        logging.error('Expected field %s of type %s in %s', name, t, context)
         exit(1)
     else:
         return data[name]
@@ -17,8 +17,8 @@ def expect_field(data, context, name, t):
 class YubiHSMConfiguration:
 
     @property
-    def connector_url(self):
-        return self.__connector_url
+    def url(self):
+        return self.__url
 
     @property
     def application_key_id(self):
@@ -36,9 +36,24 @@ class YubiHSMConfiguration:
     def audit_key_pin_path(self):
         return self.__audit_key_pin_path
 
+    def __init__(self, url, application_key_id, application_key_pin_path,
+                 audit_key_id, audit_key_pin_path):
+        self.__url = url
+        self.__application_key_id = application_key_id
+        self.__application_key_pin_path = application_key_pin_path
+        self.__audit_key_id = audit_key_id
+        self.__audit_key_pin_path = audit_key_pin_path
+
     @staticmethod
     def load_config(data):
-        pass
+        expect_field(data, 'connectors', 'url', str),
+        if 'application_key_id' in data:
+             expect_field(data, 'connectors', 'application_key_id', int)
+             expect_field(data, 'connectors', 'application_key_pin_path', str)
+        if 'audit_key_id' in data:
+             expect_field(data, 'connectors', 'audit_key_id', int)
+             expect_field(data, 'connectors', 'audit_key_pin_path', str)
+        return YubiHSMConfiguration(**data)
 
 
 class Configuration:
@@ -69,7 +84,7 @@ def main():
     logging.info('YubiHSM Exporter starts')
     config_path = os.getenv('YUBIHSM_EXPORTER_CONFIG',
                             '/etc/yubihsm-export/config.json')
-    logging.info('Load configuration from %s' % config_path)
+    logging.info('Load configuration from %s', config_path)
     config = load_configuration(config_path)
 
 
