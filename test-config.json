@@ -1,0 +1,11 @@
+{
+  "connectors": [
+    {
+      "url": "http://192.168.189.33:9010",
+      "audit_key_id": 6,
+      "audit_key_pin_path": 7,
+      "application_key_id": 3,
+      "application_key_pin_path": "/secrets/application-key-pin"
+    }
+  ]
+}
