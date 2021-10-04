@@ -7,5 +7,6 @@
       "application_key_id": 3,
       "application_key_pin_path": "/secrets/application-key-pin"
     }
-  ]
+  ],
+  "metrics_port": 8080
 }

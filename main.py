@@ -4,7 +4,8 @@ import yubihsm
 import logging
 import os
 import json
-
+import prometheus_client
+import time
 
 def expect_field(data, context, name, t):
     if name not in data or not isinstance(data[name], t):
@@ -58,25 +59,40 @@ class YubiHSMConfiguration:
 
 class Configuration:
    
-    def __init__(self, connectors):
+    def __init__(self, connectors, metrics_port):
         self.__connectors = connectors
+        self.__metrics_port = metrics_port
 
     @property
     def connectors(self):
         return self.__connectors
+
+    @property
+    def metrics_port(self):
+        return self.__metrics_port
 
     @staticmethod
     def load_config(data):
         connectors = expect_field(data, '""', 'connectors', list)
         return Configuration(
                 connectors=[YubiHSMConfiguration.load_config(c)
-                            for c in connectors])
+                            for c in connectors],
+                metrics_port=data.get('metrics_port', 8080))
 
 
 def load_configuration(path):
     with open(path) as config_file:
         data = json.load(config_file)
         return Configuration.load_config(data)
+
+
+class YubiHSMProbe:
+
+    def __init__(self, config):
+        self.__config = config
+
+    def probe(self):
+        pass
 
 
 def main():
@@ -86,6 +102,12 @@ def main():
                             '/etc/yubihsm-export/config.json')
     logging.info('Load configuration from %s', config_path)
     config = load_configuration(config_path)
+    prometheus_client.start_http_server(config.metrics_port)
+    probes = [YubiHSMProbe(c) for c in config.connectors]
+    while True:
+        for probe in probes:
+            probe.probe()
+        time.sleep(1) # FIXME
 
 
 if __name__ == "__main__":
