@@ -95,6 +95,15 @@ def version_to_string(version):
     return '%d.%d.%d' % version
 
 
+def load_pin(path):
+    try:
+        with open(path) as file:
+            return file.read().rstrip()
+    except IOError as e:
+        logging.error('Failed to read file %s: %s', path, e)
+        exit(1)
+
+
 class YubiHSMProbe:
 
     def __init__(self, config):
@@ -110,8 +119,32 @@ class YubiHSMProbe:
         self.__used_log_entries = prometheus_client.Gauge(
                 'yubihsm_used_log_entries', 'Number of used log entries in YubiHSM',
                 self.__labels.keys())
+        self.__previous_log_entry = None
 
-
+    def retrieve_logs(self, hsm):
+        try:
+            logging.info(load_pin(self.__config.audit_key_pin_path))
+            session = hsm.create_session_derived(
+                self.__config.audit_key_id,
+                load_pin(self.__config.audit_key_pin_path))
+            try:
+                logs = session.get_log_entries()
+                if logs:
+                    for log in logs.entries:
+                        logging.info(
+                                'Log #%d from %s: %d with length %d on %d & %d => %d @%d, %d, Digest: %s', 
+                                log.number, self.__config.url, log.command,
+                                log.length, log.target_key, log.second_key,
+                                log.result, log.tick, log.session_key, log.digest.hex())
+                    try: # There might be multiple log fetchers in place
+                        session.set_log_index(logs.entries[-1].number)
+                    except yubihsm.exceptions.YubiHsmDeviceError as e:
+                        pass
+            finally:
+                session.close()
+        except yubihsm.exceptions.YubiHsmError as e:
+            logging.error('Failed to retrieve logs from %s: %s, %s', 
+                          self.__config.url, type(e).__name__, str(e))
 
     def probe(self):
         logging.info('Connect to YubiHSM connector %s', self.__config.url)
@@ -123,6 +156,8 @@ class YubiHSMProbe:
                      'serial': str(info.serial)})
             self.__log_size.labels(**self.__labels).set(info.log_size)
             self.__used_log_entries.labels(**self.__labels).set(info.log_used)
+            if self.__config.audit_key_id:
+                self.retrieve_logs(hsm)
         except yubihsm.exceptions.YubiHsmConnectionError as e:
             logging.error('Failed to connect to %s: %s', self.__config.url, e)
 
