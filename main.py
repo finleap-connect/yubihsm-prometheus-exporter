@@ -37,13 +37,18 @@ class YubiHSMConfiguration:
     def audit_key_pin_path(self):
         return self.__audit_key_pin_path
 
+    @property
+    def name(self):
+        return self.__name
+
     def __init__(self, url, application_key_id, application_key_pin_path,
-                 audit_key_id, audit_key_pin_path):
+                 audit_key_id, audit_key_pin_path, name):
         self.__url = url
         self.__application_key_id = application_key_id
         self.__application_key_pin_path = application_key_pin_path
         self.__audit_key_id = audit_key_id
         self.__audit_key_pin_path = audit_key_pin_path
+        self.__name = name
 
     @staticmethod
     def load_config(data):
@@ -86,21 +91,38 @@ def load_configuration(path):
         return Configuration.load_config(data)
 
 
+def version_to_string(version):
+    return '%d.%d.%d' % version
+
+
 class YubiHSMProbe:
 
     def __init__(self, config):
         self.__config = config
-        self.__labels = dict(url=self.__config.url)
-        self.__info = prometheus_client.Info('yubihsm_device', 
-                                             'Information about YubiHSM2 device',
-                                             self.__labels.keys())
+        self.__labels = dict(url=self.__config.url,
+                             name=self.__config.name) 
+        self.__info = prometheus_client.Info(
+                'yubihsm_device', 'Information about YubiHSM2 device',
+                self.__labels.keys())
+        self.__log_size = prometheus_client.Gauge(
+                'yubihsm_log_size', 'Number of log entry in YubiHSM',
+                self.__labels.keys())
+        self.__used_log_entries = prometheus_client.Gauge(
+                'yubihsm_used_log_entries', 'Number of used log entries in YubiHSM',
+                self.__labels.keys())
+
+
 
     def probe(self):
         logging.info('Connect to YubiHSM connector %s', self.__config.url)
         hsm = yubihsm.YubiHsm.connect(self.__config.url)
         try:
             info = hsm.get_device_info()
-            self.__info.labels(**self.__labels).info({'version': str(info.version)})
+            self.__info.labels(**self.__labels).info(
+                    {'version': version_to_string(info.version),
+                     'serial': str(info.serial)})
+            self.__log_size.labels(**self.__labels).set(info.log_size)
+            self.__used_log_entries.labels(**self.__labels).set(info.log_used)
         except yubihsm.exceptions.YubiHsmConnectionError as e:
             logging.error('Failed to connect to %s: %s', self.__config.url, e)
 
