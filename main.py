@@ -123,7 +123,6 @@ class YubiHSMProbe:
 
     def retrieve_logs(self, hsm):
         try:
-            logging.info(load_pin(self.__config.audit_key_pin_path))
             session = hsm.create_session_derived(
                 self.__config.audit_key_id,
                 load_pin(self.__config.audit_key_pin_path))
