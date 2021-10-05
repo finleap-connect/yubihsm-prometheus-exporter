@@ -151,6 +151,12 @@ class YubiHSMProbe:
         self.__used_log_entries = prometheus_client.Gauge(
                 'yubihsm_used_log_entries', 'Number of used log entries in YubiHSM',
                 self.__labels.keys())
+        self.__test_connections = prometheus_client.Counter(
+                'yubihsm_test_connections', 'Number test connections to YubiHSM',
+                self.__labels.keys())
+        self.__test_errors = prometheus_client.Counter(
+                'yubihsm_test_errors', 'Number of failed YubiHSM test runs',
+                list(self.__labels.keys()) + ['error'])
         self.__previous_log_entry = None
         self.__test_secret = test_secret
 
@@ -178,6 +184,7 @@ class YubiHSMProbe:
         except yubihsm.exceptions.YubiHsmError as e:
             logging.error('Failed to retrieve logs from %s: %s, %s', 
                           self.__config.url, type(e).__name__, str(e))
+            self.__test_errors.labels(**(self.__labels | {'error': 'get_logs'})).inc()
 
     def encryption_test(self, hsm):
         try:
@@ -211,11 +218,13 @@ class YubiHSMProbe:
         except yubihsm.exceptions.YubiHsmError as e:
             logging.error('Failed encryption test on %s: %s, %s', 
                           self.__config.url, type(e).__name__, str(e))
+            self.__test_errors.labels(**(self.__labels | {'error': 'crypto_test'})).inc()
 
     def probe(self):
         logging.info('Connect to YubiHSM connector %s', self.__config.url)
         hsm = yubihsm.YubiHsm.connect(self.__config.url)
         try:
+            self.__test_connections.labels(**self.__labels).inc()
             info = hsm.get_device_info()
             self.__info.labels(**self.__labels).info(
                     {'version': version_to_string(info.version),
@@ -228,6 +237,7 @@ class YubiHSMProbe:
                 self.encryption_test(hsm)
         except yubihsm.exceptions.YubiHsmConnectionError as e:
             logging.error('Failed to connect to %s: %s', self.__config.url, e)
+            self.__test_errors.labels(**(self.__labels | {'error': 'connection'})).inc()
 
 
 def main():
