@@ -6,6 +6,8 @@ import os
 import json
 import prometheus_client
 import time
+from cryptography.hazmat.primitives.asymmetric import padding
+
 
 def expect_field(data, context, name, t):
     if name not in data or not isinstance(data[name], t):
@@ -41,14 +43,20 @@ class YubiHSMConfiguration:
     def name(self):
         return self.__name
 
-    def __init__(self, url, application_key_id, application_key_pin_path,
-                 audit_key_id, audit_key_pin_path, name):
+    @property
+    def encryption_key_label(self):
+        return self.__encryption_key_label
+
+    def __init__(self, url, application_key_id=None, application_key_pin_path='',
+                 audit_key_id=None, audit_key_pin_path='', name='',
+                 encryption_key_label=None):
         self.__url = url
         self.__application_key_id = application_key_id
         self.__application_key_pin_path = application_key_pin_path
         self.__audit_key_id = audit_key_id
         self.__audit_key_pin_path = audit_key_pin_path
         self.__name = name
+        self.__encryption_key_label = encryption_key_label
 
     @staticmethod
     def load_config(data):
@@ -56,6 +64,7 @@ class YubiHSMConfiguration:
         if 'application_key_id' in data:
              expect_field(data, 'connectors', 'application_key_id', int)
              expect_field(data, 'connectors', 'application_key_pin_path', str)
+             expect_field(data, 'connectors', 'encryption_key_label', str)
         if 'audit_key_id' in data:
              expect_field(data, 'connectors', 'audit_key_id', int)
              expect_field(data, 'connectors', 'audit_key_pin_path', str)
@@ -104,9 +113,32 @@ def load_pin(path):
         exit(1)
 
 
+class TestSecret:
+
+    DEFAULT_SECRET='🐸'
+
+    def __init__(self, secret=DEFAULT_SECRET):
+        self.__secret = secret.encode('utf8')
+        self.__encrypted = False
+
+    @property
+    def secret(self):
+        return self.__secret.decode('utf8') if not self.__encrypted else self.__secret.hex()
+
+    def get(self):
+        return self.secret, self.__encrypted
+
+    def process(self, encrypt, decrypt):
+        if self.__encrypted:
+            self.__secret = decrypt(self.__secret)
+        else:
+            self.__secret = encrypt(self.__secret)
+        self.__encrypted = not self.__encrypted
+
+
 class YubiHSMProbe:
 
-    def __init__(self, config):
+    def __init__(self, config, test_secret):
         self.__config = config
         self.__labels = dict(url=self.__config.url,
                              name=self.__config.name) 
@@ -120,6 +152,7 @@ class YubiHSMProbe:
                 'yubihsm_used_log_entries', 'Number of used log entries in YubiHSM',
                 self.__labels.keys())
         self.__previous_log_entry = None
+        self.__test_secret = test_secret
 
     def retrieve_logs(self, hsm):
         try:
@@ -139,10 +172,44 @@ class YubiHSMProbe:
                         session.set_log_index(logs.entries[-1].number)
                     except yubihsm.exceptions.YubiHsmDeviceError as e:
                         pass
+                logging.info('Retrieved logs successfully')
             finally:
                 session.close()
         except yubihsm.exceptions.YubiHsmError as e:
             logging.error('Failed to retrieve logs from %s: %s, %s', 
+                          self.__config.url, type(e).__name__, str(e))
+
+    def encryption_test(self, hsm):
+        try:
+            session = hsm.create_session_derived(
+                self.__config.application_key_id,
+                load_pin(self.__config.application_key_pin_path))
+            try:
+                key = session.list_objects(label=self.__config.encryption_key_label)
+                if len(key) == 1:
+                    key = key[0]
+                    ef = lambda x: key.get_public_key().encrypt(x, padding.PKCS1v15())
+                    df = lambda x: key.decrypt_pkcs1v1_5(x)
+                    self.__test_secret.process(decrypt=df, encrypt=ef)
+                    secret, encrypted = self.__test_secret.get()
+                    logging.info(
+                            '%s data with key from %s => %s',
+                            'Encrypted' if encrypted else 'Decrypted', 
+                            self.__config.url, secret)
+                    if not encrypted and (secret != TestSecret.DEFAULT_SECRET):
+                        logging.error(
+                            'Decryption using %s returned wrong result %s, expected %s',
+                            self.__config.url, secret, TestSecret.DEFAULT_SECRET)
+                        raise yubihsm.exceptions.YubiHsmInvalidResponseError()
+                else:
+                    logging.error(
+                            'Got None or to much objects with label %s from %s',
+                            self.__config.encryption_key_label, self.__config.url)
+                    raise yubihsm.exceptions.YubiHsmInvalidResponseError()
+            finally:
+                session.close()
+        except yubihsm.exceptions.YubiHsmError as e:
+            logging.error('Failed encryption test on %s: %s, %s', 
                           self.__config.url, type(e).__name__, str(e))
 
     def probe(self):
@@ -157,6 +224,8 @@ class YubiHSMProbe:
             self.__used_log_entries.labels(**self.__labels).set(info.log_used)
             if self.__config.audit_key_id:
                 self.retrieve_logs(hsm)
+            if self.__config.application_key_id:
+                self.encryption_test(hsm)
         except yubihsm.exceptions.YubiHsmConnectionError as e:
             logging.error('Failed to connect to %s: %s', self.__config.url, e)
 
@@ -169,7 +238,8 @@ def main():
     logging.info('Load configuration from %s', config_path)
     config = load_configuration(config_path)
     prometheus_client.start_http_server(config.metrics_port)
-    probes = [YubiHSMProbe(c) for c in config.connectors]
+    test_secret = TestSecret()
+    probes = [YubiHSMProbe(c, test_secret) for c in config.connectors]
     while True:
         for probe in probes:
             probe.probe()

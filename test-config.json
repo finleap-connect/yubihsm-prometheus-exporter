@@ -6,7 +6,8 @@
       "audit_key_id": 6,
       "audit_key_pin_path": "/secrets/audit-key-pin",
       "application_key_id": 3,
-      "application_key_pin_path": "/secrets/application-key-pin"
+      "application_key_pin_path": "/secrets/application-key-pin",
+      "encryption_key_label": "vault-hsm-key"
     }
   ],
   "metrics_port": 8080
