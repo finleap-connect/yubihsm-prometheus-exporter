@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "yubihsm-prometheus-exporter.fullname" . }}
+  labels:
+    {{- include "yubihsm-prometheus-exporter.labels" . | nindent 4 }}
+data:
+  {{- $config := dict "metrics_port" 80 }}
+  {{- $_ := set $config "connectors" .Values.yubihsm_connectors }}
+  {{- range $connector := $config.connectors }}
+    {{- range $key, $key_def := $.Values.authentication_keys }}
+    {{- $_ := set $connector ( printf "%s_key_id" $key ) $key_def.id }}
+    {{- $_ := set $connector ( printf "%s_key_pin_path" $key ) ( printf "/secrets/%s" $key ) }}
+    {{- $_ := set $connector "encryption_key_label" $.Values.encryption_key_label }}
+    {{- end }}
+  {{- end }}
+  config.json: >
+    {{- toPrettyJson $config | nindent 4 }}
