@@ -140,27 +140,52 @@ class TestSecret:
         self.__encrypted = not self.__encrypted
 
 
+class Metrics:
+
+    def __init__(self):
+        labels=["url", "name"]
+        self.__info = prometheus_client.Info(
+                'yubihsm_device', 'Information about YubiHSM2 device', labels)
+        self.__log_size = prometheus_client.Gauge(
+                'yubihsm_log_size', 'Number of log entry in YubiHSM', labels)
+        self.__used_log_entries = prometheus_client.Gauge(
+                'yubihsm_used_log_entries', 'Number of used log entries in YubiHSM',
+                labels)
+        self.__test_connections = prometheus_client.Counter(
+                'yubihsm_test_connections', 'Number test connections to YubiHSM',
+                labels)
+        self.__test_errors = prometheus_client.Counter(
+                'yubihsm_test_errors', 'Number of failed YubiHSM test runs',
+                labels + ['error'])
+ 
+    @property
+    def info(self):
+        return self.__info
+
+    @property
+    def log_size(self):
+        return self.__log_size
+
+    @property
+    def used_log_entries(self):
+        return self.__used_log_entries
+
+    @property
+    def test_connections(self):
+        return self.__test_connections
+
+    @property
+    def test_errors(self):
+        return self.__test_errors
+
+
 class YubiHSMProbe:
 
-    def __init__(self, config, test_secret):
+    def __init__(self, config, test_secret, metrics):
         self.__config = config
         self.__labels = dict(url=self.__config.url,
                              name=self.__config.name) 
-        self.__info = prometheus_client.Info(
-                'yubihsm_device', 'Information about YubiHSM2 device',
-                self.__labels.keys())
-        self.__log_size = prometheus_client.Gauge(
-                'yubihsm_log_size', 'Number of log entry in YubiHSM',
-                self.__labels.keys())
-        self.__used_log_entries = prometheus_client.Gauge(
-                'yubihsm_used_log_entries', 'Number of used log entries in YubiHSM',
-                self.__labels.keys())
-        self.__test_connections = prometheus_client.Counter(
-                'yubihsm_test_connections', 'Number test connections to YubiHSM',
-                self.__labels.keys())
-        self.__test_errors = prometheus_client.Counter(
-                'yubihsm_test_errors', 'Number of failed YubiHSM test runs',
-                list(self.__labels.keys()) + ['error'])
+        self.__metrics = metrics
         self.__previous_log_entry = None
         self.__test_secret = test_secret
 
@@ -188,7 +213,7 @@ class YubiHSMProbe:
         except yubihsm.exceptions.YubiHsmError as e:
             logging.error('Failed to retrieve logs from %s: %s, %s', 
                           self.__config.url, type(e).__name__, str(e))
-            self.__test_errors.labels(**(self.__labels | {'error': 'get_logs'})).inc()
+            self.__metrics.test_errors.labels(**(self.__labels | {'error': 'get_logs'})).inc()
 
     def encryption_test(self, hsm):
         try:
@@ -222,26 +247,26 @@ class YubiHSMProbe:
         except yubihsm.exceptions.YubiHsmError as e:
             logging.error('Failed encryption test on %s: %s, %s', 
                           self.__config.url, type(e).__name__, str(e))
-            self.__test_errors.labels(**(self.__labels | {'error': 'crypto_test'})).inc()
+            self.__metrics.test_errors.labels(**(self.__labels | {'error': 'crypto_test'})).inc()
 
     def probe(self):
         logging.info('Connect to YubiHSM connector %s', self.__config.url)
         hsm = yubihsm.YubiHsm.connect(self.__config.url)
         try:
-            self.__test_connections.labels(**self.__labels).inc()
+            self.__metrics.test_connections.labels(**self.__labels).inc()
             info = hsm.get_device_info()
-            self.__info.labels(**self.__labels).info(
+            self.__metrics.info.labels(**self.__labels).info(
                     {'version': version_to_string(info.version),
                      'serial': str(info.serial)})
-            self.__log_size.labels(**self.__labels).set(info.log_size)
-            self.__used_log_entries.labels(**self.__labels).set(info.log_used)
+            self.__metrics.log_size.labels(**self.__labels).set(info.log_size)
+            self.__metrics.used_log_entries.labels(**self.__labels).set(info.log_used)
             if self.__config.audit_key_id:
                 self.retrieve_logs(hsm)
             if self.__config.application_key_id:
                 self.encryption_test(hsm)
         except yubihsm.exceptions.YubiHsmConnectionError as e:
             logging.error('Failed to connect to %s: %s', self.__config.url, e)
-            self.__test_errors.labels(**(self.__labels | {'error': 'connection'})).inc()
+            self.__metrics.test_errors.labels(**(self.__labels | {'error': 'connection'})).inc()
 
 
 class ExitHandler:
@@ -269,7 +294,8 @@ def main():
     config = load_configuration(config_path)
     prometheus_client.start_http_server(config.metrics_port)
     test_secret = TestSecret()
-    probes = [YubiHSMProbe(c, test_secret) for c in config.connectors]
+    metrics = Metrics()
+    probes = [YubiHSMProbe(c, test_secret, metrics) for c in config.connectors]
     exit_handler = ExitHandler()
     while not exit_handler.stop:
         for probe in probes:
