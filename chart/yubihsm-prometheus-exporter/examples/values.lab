@@ -23,3 +23,9 @@ yubihsmConnectors:
   - name: stateful-0003-hsm
     url: http://10.5.32.13:9010
 
+extraLabels:
+  tenant: finleap-cloud
+
+serviceMonitor:
+  enabled: true
+
