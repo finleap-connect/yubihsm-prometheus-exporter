@@ -1,23 +1,23 @@
 image:
   tag: 0.0.2
 
-authentication_keys:
+authenticationKeys:
   audit:
     id: 6
-    pin_vault:
+    pinVault:
       path: app/yubihsm-exporter-test/keys
       field: audit
       version: 3
   application:
     id: 3
-    pin_vault:
+    pinVault:
       path: app/yubihsm-exporter-test/keys
       field: application
       version: 3
 
-encryption_key_label: vault-hsm-key
+encryptionKeyLabel: vault-hsm-key
 
-yubihsm_connectors:
+yubihsmConnectors:
   - name: stateful-0001-hsm
     url: http://10.5.32.11:9010
   - name: stateful-0003-hsm
