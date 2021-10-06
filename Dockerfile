@@ -1,7 +1,7 @@
 FROM alpine:3.14.2
 
-RUN apk add py3-pip py3-cryptography
-RUN pip install --no-cache-dir yubihsm==2.1.0 prometheus-client==0.11.0
+RUN apk add py3-cryptography py3-requests
+RUN apk add py3-pip && pip install --no-cache-dir yubihsm[http]==2.1.0 prometheus-client==0.11.0 && apk del py3-pip
 
 COPY main.py /app/
 
