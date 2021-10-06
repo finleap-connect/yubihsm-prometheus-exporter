@@ -1,7 +1,7 @@
 {
   "connectors": [
     {
-      "url": "http://10.0.10.216:9010",
+      "url": "http://172.17.0.1:9010",
       "name": "🐸",
       "audit_key_id": 6,
       "audit_key_pin_path": "/secrets/audit-key-pin",

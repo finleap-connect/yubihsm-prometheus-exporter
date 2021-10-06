@@ -6,7 +6,11 @@ import os
 import json
 import prometheus_client
 import time
+import signal
 from cryptography.hazmat.primitives.asymmetric import padding
+
+
+SLEEP_TIME_BETWEEN_PROBES = 5
 
 
 def expect_field(data, context, name, t):
@@ -240,6 +244,22 @@ class YubiHSMProbe:
             self.__test_errors.labels(**(self.__labels | {'error': 'connection'})).inc()
 
 
+class ExitHandler:
+
+    def __init__(self):
+        self.__stop = False
+        signal.signal(signal.SIGINT, self.exit)
+        signal.signal(signal.SIGTERM, self.exit)
+
+    @property
+    def stop(self):
+        return self.__stop
+
+    def exit(self, *args):
+        logging.info("Stopping ...")
+        self.__stop = True
+
+
 def main():
     logging.basicConfig(encoding='utf-8', level=logging.INFO)
     logging.info('YubiHSM Exporter starts')
@@ -250,10 +270,12 @@ def main():
     prometheus_client.start_http_server(config.metrics_port)
     test_secret = TestSecret()
     probes = [YubiHSMProbe(c, test_secret) for c in config.connectors]
-    while True:
+    exit_handler = ExitHandler()
+    while not exit_handler.stop:
         for probe in probes:
             probe.probe()
-        time.sleep(1) # FIXME
+        logging.info("Sleep 5 seconds before probing next YubiHSM")
+        time.sleep(SLEEP_TIME_BETWEEN_PROBES)
 
 
 if __name__ == "__main__":
