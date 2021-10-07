@@ -4,6 +4,7 @@ include:
       - build-image.yaml
       - build-chart.yaml
       - lint-chart.yaml
+      - stackrox-scan.yaml
 
 stages:
   - test
