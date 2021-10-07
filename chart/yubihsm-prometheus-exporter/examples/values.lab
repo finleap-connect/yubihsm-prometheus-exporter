@@ -20,6 +20,8 @@ encryptionKeyLabel: vault-hsm-key
 yubihsmConnectors:
   - name: stateful-0001-hsm
     url: http://10.5.32.11:9010
+  - name: stateful-0002-hsm
+    url: http://10.5.32.12:9010
   - name: stateful-0003-hsm
     url: http://10.5.32.13:9010
 
@@ -27,5 +29,8 @@ extraLabels:
   tenant: finleap-cloud
 
 serviceMonitor:
+  enabled: true
+
+prometheusRules:
   enabled: true
 

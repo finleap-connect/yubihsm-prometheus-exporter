@@ -28,6 +28,9 @@ extraLabels: {}
 serviceMonitor:
   enabled: false
 
+prometheusRules:
+  enabled: true
+
 podAnnotations: {}
 
 podSecurityContext: {}

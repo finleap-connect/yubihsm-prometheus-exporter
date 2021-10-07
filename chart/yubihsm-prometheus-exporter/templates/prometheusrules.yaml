@@ -1,0 +1,42 @@
+{{- if .Values.prometheusRules.enabled -}}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "yubihsm-prometheus-exporter.fullname" . }}
+  labels:
+    {{- include "yubihsm-prometheus-exporter.labels" . | nindent 4 }}
+spec:
+  groups:
+  - name: yubihsm.rules
+    rules:
+    - alert: YubiHSMExporterDoesNotRun
+      expr: 'absent(up{job="{{ include "yubihsm-prometheus-exporter.fullname" .  }}"})'
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        description: "The YubiHSM Metrics Exporter seems to be down."
+        summary: "YubiHSM Prometheus Exporter not running"
+    - alert: YubiHSMHighFailureRate
+      expr: 'sum by (url, name) (rate(yubihsm_test_errors_total[1m])) / sum by (url, name) (rate(yubihsm_test_connections_total[1m])) > 0.2'
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "High rate of failed YubiHSM tests."
+        description: |
+          The rate of failures while testing the YubiHSM {{`{{ $labels.name }}`}} with
+          endpoint {{`{{ $labels.url }}`}} is to high. Check the state of the YubiHSM
+          and its Connector (service yubihsm-connector) on the hosting stateful node.
+    - alert: YubiHSMNoTestsDoneForAWhile
+      expr: 'avg by (url, name) (increase(yubihsm_test_connections_total[1m])) < 1'
+      for: 5m
+      labels:
+        severity: critical
+      annotations:
+        summary: "YubiHSM Prometheus Exporter stopped working."
+        description: |
+          The YubiHSM Prometheus exporter did not report new tests for YubiHSM
+          {{`{{ $labels.name }}`}} with endpoint {{`{{ $labels.url }}`}} over
+          the last few minutes. Check the YubiHSM Exporter's state.
+{{- end -}}
