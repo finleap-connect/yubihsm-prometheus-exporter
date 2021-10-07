@@ -1,13 +1,14 @@
 #!/usr/bin/python3
 
-import yubihsm
 import logging
 import os
 import json
-import prometheus_client
 import time
 import signal
 from cryptography.hazmat.primitives.asymmetric import padding
+
+import yubihsm
+import prometheus_client
 
 
 SLEEP_TIME_BETWEEN_PROBES = 5
@@ -64,19 +65,19 @@ class YubiHSMConfiguration:
 
     @staticmethod
     def load_config(data):
-        expect_field(data, 'connectors', 'url', str),
+        expect_field(data, 'connectors', 'url', str)
         if 'application_key_id' in data:
-             expect_field(data, 'connectors', 'application_key_id', int)
-             expect_field(data, 'connectors', 'application_key_pin_path', str)
-             expect_field(data, 'connectors', 'encryption_key_label', str)
+            expect_field(data, 'connectors', 'application_key_id', int)
+            expect_field(data, 'connectors', 'application_key_pin_path', str)
+            expect_field(data, 'connectors', 'encryption_key_label', str)
         if 'audit_key_id' in data:
-             expect_field(data, 'connectors', 'audit_key_id', int)
-             expect_field(data, 'connectors', 'audit_key_pin_path', str)
+            expect_field(data, 'connectors', 'audit_key_id', int)
+            expect_field(data, 'connectors', 'audit_key_pin_path', str)
         return YubiHSMConfiguration(**data)
 
 
 class Configuration:
-   
+
     def __init__(self, connectors, metrics_port):
         self.__connectors = connectors
         self.__metrics_port = metrics_port
@@ -157,7 +158,7 @@ class Metrics:
         self.__test_errors = prometheus_client.Counter(
                 'yubihsm_test_errors', 'Number of failed YubiHSM test runs',
                 labels + ['error'])
- 
+
     @property
     def info(self):
         return self.__info
@@ -184,7 +185,7 @@ class YubiHSMProbe:
     def __init__(self, config, test_secret, metrics):
         self.__config = config
         self.__labels = dict(url=self.__config.url,
-                             name=self.__config.name) 
+                             name=self.__config.name)
         self.__metrics = metrics
         self.__previous_log_entry = None
         self.__test_secret = test_secret
