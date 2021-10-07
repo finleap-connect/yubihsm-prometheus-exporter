@@ -9,3 +9,7 @@ stages:
   - test
   - deliver
   - qa
+
+variables:
+  CHART_DIR: chart/yubihsm-prometheus-exporter
+
