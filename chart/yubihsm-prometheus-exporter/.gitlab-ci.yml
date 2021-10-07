@@ -1,0 +1,11 @@
+include:
+  - project: solutions/pipeline-recipes
+    file:
+      - build-image.yaml
+      - build-chart.yaml
+      - lint-chart.yaml
+
+stages:
+  - test
+  - deliver
+  - qa
