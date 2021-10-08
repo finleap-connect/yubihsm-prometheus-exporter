@@ -14,3 +14,9 @@ stages:
 variables:
   CHART_DIR: chart/yubihsm-prometheus-exporter
 
+unit_tests:
+  stage: test
+  image: registry.gitlab.figo.systems/finleap-cloud-tools/docker-builder:1.7.2
+  script:
+    - img build . -f Dockerfile -t test --no-cache --target test
+
