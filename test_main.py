@@ -1,9 +1,11 @@
-from unittest.mock import patch, mock_open
+from unittest.mock import patch, mock_open, MagicMock
+from collections import namedtuple
 
 import main
 
 import pytest
 import prometheus_client
+import yubihsm
 
 def test_expect_field():
     assert main.expect_field(dict(foo='bar'), '', 'foo', str) == 'bar'
@@ -124,4 +126,52 @@ def test_metrics_helper():
             metrics.test_errors.labels(url='mu', name='ma', error='mi'),
             prometheus_client.Counter)
 
+
+DeviceInfo = namedtuple(
+    'DeviceInfo', ['version', 'serial', 'log_size', 'log_used']
+)
+
+
+@patch('main.Metrics')
+@patch('yubihsm.core.YubiHsm')
+def test_yubihsm_probe(yubihsm_mock, metrics_mock):
+    test_secret = main.TestSecret('mySecret')
+    connector = main.YubiHSMConfiguration(
+            url='http://first-node.de',
+            audit_key_id=7, audit_key_pin_path='foo/bar/audit',
+            application_key_id=8, application_key_pin_path='application/',
+            encryption_key_label='foo')
+    probe = main.YubiHSMProbe(connector, test_secret, metrics_mock)
+    yubihsm_mock.get_device_info = MagicMock(return_value=DeviceInfo(
+        version=(3, 4, 5), serial='6789', log_size=63, log_used=7))
+    key_mock = MagicMock(spec=yubihsm.objects.AsymmetricKey)
+    session_mock = MagicMock(spec=yubihsm.core.AuthSession)
+    session_mock.list_objects = MagicMock(return_value=[key_mock])
+    yubihsm_mock.create_session_derived = MagicMock(return_value=session_mock)
+    with (
+            patch('yubihsm.YubiHsm.connect', return_value=yubihsm_mock) as connect_mock, 
+            patch('main.load_pin') as load_pin_mock
+    ):
+        probe.probe()
+        connect_mock.assert_called_once_with('http://first-node.de')
+        assert yubihsm_mock.get_device_info.called
+        # TODO: check actual values passed to the metric collectors
+        expected_labels=dict(url='http://first-node.de', name='')
+        metrics_mock.info.labels.assert_called_with(**expected_labels)
+        metrics_mock.log_size.labels.assert_called_with(**expected_labels)
+        metrics_mock.used_log_entries.labels.assert_called_with(
+                **expected_labels)
+        # TODO: check log retrieval
+        
+        # TODO: check encryption test
+        assert session_mock.list_objects.called
+        probe.probe()
+        # TODO: test error cases
+        yubihsm_mock.get_device_info.side_effect = (
+                yubihsm.exceptions.YubiHsmConnectionError())
+        probe.probe()
+        expected_labels['error'] = 'connection'
+        metrics_mock.test_errors.labels.assert_called_with(
+                **expected_labels)
+        yubihsm_mock.get_device_info.side_effect = None
 
