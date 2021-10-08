@@ -197,7 +197,7 @@ class YubiHSMProbe:
                 load_pin(self.__config.audit_key_pin_path))
             try:
                 logs = session.get_log_entries()
-                if logs:
+                if logs.entries:
                     for log in logs.entries:
                         logging.info(
                                 'Log #%d from %s: %d with length %d on %d & %d => %d @%d, %d, Digest: %s', 
