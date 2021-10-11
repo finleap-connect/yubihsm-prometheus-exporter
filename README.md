@@ -144,3 +144,34 @@ The sources are currently in a single [python file](main.py).
 There is a [Dockerfile](Dockerfile), which embedds the tests as build stage 
 *test*.
 
+### Run tests locally
+
+There is a [script](test.sh), which retrieves the passphrases for the 
+authentication keys on the lab YubiHSMs from pass and passes them to a build
+of the container image. The build then runs the unit tests and an integration
+test. In latter an actual YubiHSM and the full Prometheus metrics interface is
+under test. For the latter to work you need to create an SSH tunnel from your
+local device to an YubiHSM connector on the lab cluster, e.g. with:
+
+```
+lukas@lukas-t14s:~$ ssh norbert@172.16.1.14 -L 0.0.0.0:9010:10.5.32.11:9010
+norbert@origin-1:~$
+```
+
+which forwards the port *9010* on all local interfaces to the connector on 
+stateful node (10.5.32.11) on lab. **Note:** The helper script then refers
+the test YubiHSM using the IP of the Docker bridge, which under my (Lukas')
+Linux is reachable from any container. This might be different for you, 
+especially on Mac.
+
+### Tests in CI / CD pipeline
+
+The pipeline has two test jobs:
+- One does call the unit tests only.
+- One runs all tests on the lab cluster. The CI/CD variables contain the
+authentication keys' passphrases, which were manually copied from pass.
+
+### Tests for the chart
+
+There aren't any yet.
+
