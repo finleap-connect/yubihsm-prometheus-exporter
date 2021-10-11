@@ -20,3 +20,14 @@ unit_tests:
   script:
     - img build . -f Dockerfile -t test --no-cache --target test
 
+full_tests:
+  stage: test
+  allow_failure: true
+  tags:
+    - labcluster
+  variables:
+    TEST_YUBIHSM_CONNECTOR: "http://10.5.32.11:9010"
+  image: registry.gitlab.figo.systems/finleap-cloud-tools/docker-builder:1.7.2
+  script:
+    - img build . -f Dockerfile -t test --no-cache --target test
+

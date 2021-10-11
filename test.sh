@@ -14,9 +14,12 @@ echo ""
 pass show vault/lab/yubi-hsm-audit-pin > "$pin_directory/audit"
 #echo "wrong-pin" > "$pin_directory/application"
 pass show vault/lab/yubi-hsm-pin > "$pin_directory/application"
-docker build -t test .
-docker run -v $(pwd)/test-config.json:/etc/yubihsm-export/config.json \
-	-v "$pin_directory/audit":/secrets/audit-key-pin \
-	-v "$pin_directory/application":/secrets/application-key-pin \
-	-p 8080:8080 -it test
+docker build --build-arg TEST_YUBIHSM_CONNECTOR="http://172.17.0.1:9010" \
+	--build-arg TEST_YUBIHSM_AUDIT_KEY_PIN="$(pass show vault/lab/yubi-hsm-audit-pin)" \
+	--build-arg TEST_YUBIHSM_APP_KEY_PIN="$(pass show vault/lab/yubi-hsm-pin)" \
+	-t test .
+#docker run -v $(pwd)/test-config.json:/etc/yubihsm-export/config.json \
+#	-v "$pin_directory/audit":/secrets/audit-key-pin \
+#	-v "$pin_directory/application":/secrets/application-key-pin \
+#	-p 8080:8080 -it test
 
