@@ -72,7 +72,7 @@ def retrieve_metrics(url):
 
 def scrape(url, duration, sleep_duration=1):
     METRICS_OF_INTEREST = ('yubihsm_test_errors_total', 'yubihsm_device_info',
-            'yubihsm_log_size_total', 'yubihsm_used_log_entries_total', 
+            'yubihsm_log_size', 'yubihsm_used_log_entries', 
             'yubihsm_test_connections_total')
     samples = list()
     start_time = datetime.datetime.now()
@@ -92,7 +92,7 @@ def test_metric_retrieval():
     config_path = create_test_config(temp_dir)
     process = start_exporter_instance(config_path)
     metrics_url = 'http://localhost:%s' % TEST_PORT
-    samples = scrape(metrics_url, 5)
+    samples = scrape(metrics_url, 30)
     process.send_signal(15)
     hsms = set((x.labels['name'], x.labels['url']) for x in samples)
     assert ('1. HSM', 'http://172.17.0.1:9010') in hsms
@@ -102,7 +102,36 @@ def test_metric_retrieval():
             if x.labels['name']=='1. HSM' and x.name=='yubihsm_device_info')
     assert 'version' in device_info.labels
     assert 'serial' in device_info.labels
-
-    assert False
+    assert any(x for x in samples if x.labels['name']=='1. HSM' 
+            and x.name=='yubihsm_log_size')
+    assert any(x for x in samples if x.labels['name']=='1. HSM'
+            and x.name=='yubihsm_used_log_entries')
+    assert any(x for x in samples
+            if x.labels['name']=='misconfigured_hsm'
+            and x.name=='yubihsm_test_errors_total' 
+            and x.labels['error']=='get_logs')
+    assert any(x for x in samples
+            if x.labels['name']=='misconfigured_hsm'
+            and x.name=='yubihsm_test_errors_total' 
+            and x.labels['error']=='crypto_test')
+    connection_errors = max(x.value for x in samples
+            if x.labels['name']=='3. HSM'
+            and x.name=='yubihsm_test_errors_total' 
+            and x.labels['error']=='connection')
+    tries = max(x.value for x in samples
+            if x.labels['name']=='3. HSM'
+            and x.name=='yubihsm_test_connections_total')
+    assert connection_errors == tries
+    assert tries > 1
+    assert not any(x for x in samples
+            if x.labels['name']=='1. HSM'
+            and x.name=='yubihsm_test_errors_total')
+    min_tries = min(x.value for x in samples
+            if x.labels['name']=='1. HSM'
+            and x.name=='yubihsm_test_connections_total')
+    max_tries = max(x.value for x in samples
+            if x.labels['name']=='1. HSM'
+            and x.name=='yubihsm_test_connections_total')
+    assert max_tries - min_tries > 1
     print(process.communicate())
 
