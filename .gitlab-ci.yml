@@ -29,5 +29,9 @@ full_tests:
     TEST_YUBIHSM_CONNECTOR: "http://10.5.32.11:9010"
   image: registry.gitlab.figo.systems/finleap-cloud-tools/docker-builder:1.7.2
   script:
-    - img build . -f Dockerfile -t test --no-cache --target test
+    - img build . -f Dockerfile -t test \
+        --build-arg TEST_YUBIHSM_CONNECTOR="$TEST_YUBIHSM_CONNECTOR" \
+	--build-arg TEST_YUBIHSM_AUDIT_KEY_PIN="$TEST_YUBIHSM_AUDIT_KEY_PIN" \
+	--build-arg TEST_YUBIHSM_APP_KEY_PIN="$TEST_YUBIHSM_APP_KEY_PIN" \
+        --target test
 
