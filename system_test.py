@@ -95,7 +95,7 @@ def test_metric_retrieval():
     samples = scrape(metrics_url, 30)
     process.send_signal(15)
     hsms = set((x.labels['name'], x.labels['url']) for x in samples)
-    assert ('1. HSM', 'http://172.17.0.1:9010') in hsms
+    assert ('1. HSM', TEST_YUBIHSM_CONNECTOR) in hsms
     assert ('misconfigured_hsm', 'http://172.17.0.1:9010') in hsms
     assert ('3. HSM', 'http://somewhere-some.time') in hsms
     device_info = next(x for x in samples 
